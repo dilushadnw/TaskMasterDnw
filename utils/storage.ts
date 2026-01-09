@@ -33,6 +33,8 @@ export interface Task {
   completed: boolean;
   priority: 'high' | 'medium' | 'low';
   createdAt: string;
+  date: string;
+  description?: string;
 }
 
 /**
