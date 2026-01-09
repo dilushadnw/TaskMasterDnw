@@ -38,6 +38,8 @@ export default function HomeScreen() {
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
   const [showOverdueInToday, setShowOverdueInToday] = useState(true);
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<Task | null>(null);
+  const [isStatsExpanded, setIsStatsExpanded] = useState(false);
+  const [statsScope, setStatsScope] = useState<'All' | 'Today'>('Today');
 
   // Theme colors
   const theme = {
@@ -244,10 +246,15 @@ export default function HomeScreen() {
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
-  const completedTasks = tasks.filter(t => t.completed).length;
-  const totalTasks = tasks.length;
-  const pendingTasks = totalTasks - completedTasks;
-  const completionRate = Math.round((completedTasks / totalTasks) * 100);
+  const todayDate = new Date().toISOString().split('T')[0];
+  const statsTasks = statsScope === 'Today' 
+    ? tasks.filter(t => t.date === todayDate) 
+    : tasks;
+
+  const completedTasks = statsTasks.filter(t => t.completed).length;
+  const totalStatsTasks = statsTasks.length;
+  const pendingTasks = totalStatsTasks - completedTasks;
+  const completionRate = totalStatsTasks > 0 ? Math.round((completedTasks / totalStatsTasks) * 100) : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -296,40 +303,74 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Stats Cards */}
+      {/* Collapsible Stats Section */}
+      <View style={[styles.collapsibleStats, { backgroundColor: theme.cardBg, borderBottomColor: theme.border }]}>
+        <TouchableOpacity 
+          style={styles.statsHeader} 
+          onPress={() => setIsStatsExpanded(!isStatsExpanded)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.statsHeaderLeft}>
+            <View style={[styles.statsDot, { backgroundColor: theme.primary }]} />
+            <Text style={[styles.statsHeaderText, { color: theme.text }]}>Dashboard Insights</Text>
+            <View style={[styles.statsScopeBadge, { backgroundColor: isDarkMode ? '#334155' : '#F3F4F6' }]}>
+              <Text style={[styles.statsScopeText, { color: theme.textSecondary }]}>{statsScope}</Text>
+            </View>
+          </View>
+          <Ionicons name={isStatsExpanded ? "chevron-up" : "chevron-down"} size={20} color={theme.textSecondary} />
+        </TouchableOpacity>
+
+        {isStatsExpanded && (
+          <View style={styles.statsExpandedContent}>
+            <View style={styles.statsScopeSelector}>
+              {(['Today', 'All'] as const).map((scope) => (
+                <TouchableOpacity 
+                  key={scope}
+                  onPress={() => setStatsScope(scope)}
+                  style={[
+                    styles.scopeBtn, 
+                    statsScope === scope && { backgroundColor: theme.primary, borderColor: theme.primary }
+                  ]}
+                >
+                  <Text style={[styles.scopeBtnText, { color: statsScope === scope ? '#fff' : theme.textSecondary }]}>
+                    {scope}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.statsGrid}>
+              <View style={[styles.miniStatCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F9FAFB' }]}>
+                <Ionicons name="checkmark-done" size={20} color="#10B981" />
+                <View>
+                  <Text style={[styles.miniStatNumber, { color: theme.text }]}>{completedTasks}</Text>
+                  <Text style={[styles.miniStatLabel, { color: theme.textSecondary }]}>Done</Text>
+                </View>
+              </View>
+              <View style={[styles.miniStatCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F9FAFB' }]}>
+                <Ionicons name="alert-circle" size={20} color="#F59E0B" />
+                <View>
+                  <Text style={[styles.miniStatNumber, { color: theme.text }]}>{pendingTasks}</Text>
+                  <Text style={[styles.miniStatLabel, { color: theme.textSecondary }]}>Pending</Text>
+                </View>
+              </View>
+              <View style={[styles.miniStatCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F9FAFB' }]}>
+                <Ionicons name="speedometer" size={20} color={theme.primary} />
+                <View>
+                  <Text style={[styles.miniStatNumber, { color: theme.text }]}>{completionRate}%</Text>
+                  <Text style={[styles.miniStatLabel, { color: theme.textSecondary }]}>Rate</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.statsContainer}>
-          {/* Completed Card */}
-          <View style={[styles.statCard, styles.statCardGreen]}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="checkmark-circle" size={36} color="#fff" />
-            </View>
-            <Text style={styles.statNumber}>{completedTasks}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
-            <View style={styles.statCardShine} />
-          </View>
-
-          {/* Pending Card */}
-          <View style={[styles.statCard, { backgroundColor: theme.cardBg }]}>
-            <View style={[styles.statIconContainer, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5' }]}>
-              <Ionicons name="time-outline" size={36} color={theme.primary} />
-            </View>
-            <Text style={[styles.statNumberDark, { color: theme.text }]}>{pendingTasks}</Text>
-            <Text style={[styles.statLabelDark, { color: theme.textSecondary }]}>Pending</Text>
-          </View>
-
-          {/* Progress Card */}
-          <View style={[styles.statCard, { backgroundColor: theme.cardBg }]}>
-            <View style={[styles.statIconContainer, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5' }]}>
-              <Ionicons name="trending-up" size={36} color={theme.primary} />
-            </View>
-            <Text style={[styles.statNumberDark, { color: theme.text }]}>{completionRate}%</Text>
-            <Text style={[styles.statLabelDark, { color: theme.textSecondary }]}>Progress</Text>
-          </View>
-        </View>
+        <View style={{ height: 10 }} />
 
         {/* Filter Tabs */}
         <ScrollView 
@@ -540,26 +581,17 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Add Task Button */}
-        <TouchableOpacity 
-          style={styles.addButton} 
-          activeOpacity={0.8}
-          onPress={() => setIsModalVisible(true)}
-        >
-          <View style={styles.addButtonContent}>
-            <View style={styles.addIconCircle}>
-              <Ionicons name="add" size={32} color="#fff" />
-            </View>
-            <View style={styles.addButtonTextContainer}>
-              <Text style={styles.addButtonTitle}>Add New Task</Text>
-              <Text style={styles.addButtonSubtitle}>Create a task and stay productive</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#fff" />
-          </View>
-        </TouchableOpacity>
-
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity 
+        style={[styles.floatingAddButton, { backgroundColor: theme.primary }]}
+        onPress={() => setIsModalVisible(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={32} color="#fff" />
+      </TouchableOpacity>
 
       {/* Task Entry Modal */}
       <Modal
@@ -1438,5 +1470,97 @@ const styles = StyleSheet.create({
   detailDate: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  collapsibleStats: {
+    borderBottomWidth: 1,
+    zIndex: 10,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  statsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statsDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statsHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  statsScopeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statsScopeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  statsExpandedContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  statsScopeSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 15,
+  },
+  scopeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  scopeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  miniStatCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+  },
+  miniStatNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  miniStatLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  floatingAddButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 999,
   },
 });
