@@ -32,6 +32,12 @@ export default function HomeScreen() {
   const [taskDate, setTaskDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Today' | 'Upcoming' | 'Past' | 'Completed'>('Today');
+  const [categories, setCategories] = useState(['Work', 'Design', 'Meeting', 'Personal', 'Development']);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
+  const [showOverdueInToday, setShowOverdueInToday] = useState(true);
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<Task | null>(null);
 
   // Theme colors
   const theme = {
@@ -171,18 +177,59 @@ export default function HomeScreen() {
     
     const todayDate = new Date().toISOString().split('T')[0];
     
+    // Base time/status filter
+    let baseFiltered = matchesSearch;
     if (selectedFilter === 'Today') {
-      return matchesSearch && (task.date === todayDate || (task.date < todayDate && !task.completed));
+      const isOverdueIncluded = showOverdueInToday ? (task.date < todayDate && !task.completed) : false;
+      baseFiltered = matchesSearch && (task.date === todayDate || isOverdueIncluded);
     } else if (selectedFilter === 'Upcoming') {
-      return matchesSearch && task.date > todayDate;
+      baseFiltered = matchesSearch && task.date > todayDate;
     } else if (selectedFilter === 'Past') {
-      return matchesSearch && task.date < todayDate && !task.completed;
+      baseFiltered = matchesSearch && task.date < todayDate && !task.completed;
     } else if (selectedFilter === 'Completed') {
-      return matchesSearch && task.completed;
+      baseFiltered = matchesSearch && task.completed;
     }
-    
-    return matchesSearch;
+
+    // Category filter
+    const matchesCategory = selectedCategory === 'All' || task.category === selectedCategory;
+
+    return baseFiltered && matchesCategory;
   }).sort((a, b) => a.date.localeCompare(b.date));
+
+  const addNewCategory = () => {
+    if (newCategoryName.trim() === '') return;
+    if (categories.includes(newCategoryName.trim())) {
+      Alert.alert('Error', 'Category already exists');
+      return;
+    }
+    setCategories([...categories, newCategoryName.trim()]);
+    setTaskCategory(newCategoryName.trim());
+    setNewCategoryName('');
+  };
+
+  const deleteCategory = (category: string) => {
+    if (categories.length <= 1) {
+      Alert.alert('Error', 'At least one category is required');
+      return;
+    }
+    Alert.alert(
+      'Delete Category',
+      `Are you sure you want to delete "${category}"? Tasks in this category will be moved to "Personal".`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: () => {
+            setCategories(categories.filter(c => c !== category));
+            setTasks(tasks.map(t => t.category === category ? { ...t, category: 'Personal' } : t));
+            if (selectedCategory === category) setSelectedCategory('All');
+            if (taskCategory === category) setTaskCategory('Personal');
+          } 
+        },
+      ]
+    );
+  };
 
   const getDayLabel = (dateString: string) => {
     const todayDate = new Date().toISOString().split('T')[0];
@@ -330,6 +377,40 @@ export default function HomeScreen() {
           })}
         </ScrollView>
 
+        {/* Category Filter Tabs */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={[styles.filterTabsWrapper, { marginTop: 0 }]}
+          contentContainerStyle={styles.filterTabsContent}
+        >
+          <TouchableOpacity
+            style={[styles.catFilterButton, { backgroundColor: theme.cardBg, borderColor: theme.border }]}
+            onPress={() => setIsCategoryModalVisible(true)}
+          >
+            <Ionicons name="settings-outline" size={18} color={theme.primary} />
+          </TouchableOpacity>
+          {['All', ...categories].map((cat) => {
+            const isActive = selectedCategory === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  styles.catFilterButton,
+                  { backgroundColor: theme.cardBg, borderColor: isActive ? theme.primary : theme.border },
+                  isActive && { borderWidth: 1.5 }
+                ]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                <Text style={[
+                  styles.catFilterText,
+                  { color: isActive ? theme.text : theme.textSecondary }
+                ]}>{cat}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         {/* Tasks Section */}
         <View style={styles.tasksSection}>
           <View style={styles.sectionHeader}>
@@ -344,10 +425,20 @@ export default function HomeScreen() {
                 {filteredTasks.length} tasks {selectedFilter === 'All' ? 'total' : 'found'}
               </Text>
             </View>
-            <TouchableOpacity style={[styles.viewAllButton, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5' }]}>
-              <Text style={[styles.seeAllText, { color: theme.primary }]}>View All</Text>
-              <Ionicons name="arrow-forward" size={16} color={theme.primary} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              {selectedFilter === 'Today' && (
+                <TouchableOpacity 
+                  style={[styles.toggleBtn, { backgroundColor: showOverdueInToday ? theme.primary : (isDarkMode ? '#334155' : '#F3F4F6') }]} 
+                  onPress={() => setShowOverdueInToday(!showOverdueInToday)}
+                >
+                  <Text style={[styles.toggleText, { color: showOverdueInToday ? '#fff' : theme.textSecondary }]}>Show Overdue</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[styles.viewAllButton, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5' }]}>
+                <Text style={[styles.seeAllText, { color: theme.primary }]}>View All</Text>
+                <Ionicons name="arrow-forward" size={16} color={theme.primary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
 
@@ -394,9 +485,12 @@ export default function HomeScreen() {
                       {task.title}
                     </Text>
                     {task.description ? (
-                      <Text style={[styles.taskDescriptionText, { color: theme.textSecondary }]} numberOfLines={2}>
-                        {task.description}
-                      </Text>
+                      <TouchableOpacity onPress={() => setSelectedTaskDetail(task)}>
+                        <Text style={[styles.taskDescriptionText, { color: theme.textSecondary }]} numberOfLines={2}>
+                          {task.description}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: theme.primary, fontWeight: '700', marginTop: -4 }}>Tap to see more...</Text>
+                      </TouchableOpacity>
                     ) : null}
                     <View style={styles.taskMeta}>
                       {task.date < new Date().toISOString().split('T')[0] && !task.completed && (
@@ -518,7 +612,7 @@ export default function HomeScreen() {
               <View style={styles.inputContainer}>
                 <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Category</Text>
                 <View style={styles.categoryPicker}>
-                  {['Work', 'Design', 'Meeting', 'Personal'].map((cat) => (
+                  {categories.map((cat) => (
                     <TouchableOpacity
                       key={cat}
                       style={[
@@ -607,6 +701,115 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </Pressable>
           </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Category Management Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isCategoryModalVisible}
+        onRequestClose={() => setIsCategoryModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setIsCategoryModalVisible(false)}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBg, maxHeight: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Manage Categories</Text>
+              <TouchableOpacity onPress={() => setIsCategoryModalVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.inputContainer, { marginTop: 10 }]}>
+              <View style={styles.addCategoryRow}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1, height: 44, backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
+                  placeholder="New Category Name..."
+                  placeholderTextColor={theme.textSecondary}
+                  value={newCategoryName}
+                  onChangeText={setNewCategoryName}
+                />
+                <TouchableOpacity 
+                  style={[styles.addCategoryBtn, { backgroundColor: theme.primary }]}
+                  onPress={addNewCategory}
+                >
+                  <Ionicons name="add" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView style={{ marginTop: 20 }}>
+              {categories.map((cat) => (
+                <View key={cat} style={[styles.categoryItem, { borderColor: theme.border }]}>
+                  <Text style={[styles.categoryItemText, { color: theme.text }]}>{cat}</Text>
+                  <TouchableOpacity onPress={() => deleteCategory(cat)}>
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Task Detail Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={!!selectedTaskDetail}
+        onRequestClose={() => setSelectedTaskDetail(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setSelectedTaskDetail(null)}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Task Details</Text>
+              <TouchableOpacity onPress={() => setSelectedTaskDetail(null)}>
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedTaskDetail && (
+              <ScrollView>
+                <Text style={[styles.detailTitle, { color: theme.text }]}>{selectedTaskDetail.title}</Text>
+                
+                <View style={styles.detailMetaRow}>
+                  <View style={[styles.categoryBadge, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5', borderColor: isDarkMode ? '#10B981' : '#D1FAE5' }]}>
+                    <Text style={[styles.categoryText, { color: theme.primary }]}>{selectedTaskDetail.category}</Text>
+                  </View>
+                  <View style={[
+                    styles.priorityIndicator,
+                    selectedTaskDetail.priority === 'high' && styles.priorityHigh,
+                    selectedTaskDetail.priority === 'medium' && styles.priorityMedium,
+                    selectedTaskDetail.priority === 'low' && styles.priorityLow,
+                  ]}>
+                    <Text style={styles.priorityText}>{selectedTaskDetail.priority.toUpperCase()}</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.detailSection, { borderTopWidth: 1, borderTopColor: theme.border }]}>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Description</Text>
+                  <Text style={[styles.detailDescription, { color: theme.text }]}>
+                    {selectedTaskDetail.description || 'No description provided.'}
+                  </Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Due Date</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Ionicons name="calendar-outline" size={18} color={theme.primary} style={{ marginRight: 8 }} />
+                    <Text style={[styles.detailDate, { color: theme.text }]}>{getDayLabel(selectedTaskDetail.date)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+            
+            <TouchableOpacity 
+              style={[styles.submitButton, { backgroundColor: theme.primary, marginTop: 20 }]}
+              onPress={() => setSelectedTaskDetail(null)}
+            >
+              <Text style={styles.submitButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
         </Pressable>
       </Modal>
     </View>
@@ -1156,5 +1359,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
     lineHeight: 20,
+  },
+  catFilterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#fff',
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catFilterText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  addCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
+  addCategoryBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  toggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  categoryItemText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  detailTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  detailMetaRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  detailSection: {
+    paddingVertical: 15,
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  detailDescription: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  detailDate: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
