@@ -142,3 +142,23 @@ export const clearAllTasks = async (): Promise<void> => {
     throw error;
   }
 };
+
+const USER_NAME_KEY = '@DnwTaskMaster:user_name';
+
+export const saveUserName = async (name: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(USER_NAME_KEY, name);
+  } catch (error) {
+    console.error('Error saving user name:', error);
+  }
+};
+
+export const loadUserName = async (): Promise<string> => {
+  try {
+    const name = await AsyncStorage.getItem(USER_NAME_KEY);
+    return name || 'User';
+  } catch (error) {
+    console.error('Error loading user name:', error);
+    return 'User';
+  }
+};

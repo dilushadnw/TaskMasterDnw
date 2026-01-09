@@ -1,9 +1,10 @@
-import { Task, loadTasks, saveTasks } from '@/utils/storage';
+import { Task, loadTasks, loadUserName, saveTasks, saveUserName } from '@/utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
+    Linking,
     Modal,
     Platform,
     Pressable,
@@ -37,9 +38,16 @@ export default function HomeScreen() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
   const [showOverdueInToday, setShowOverdueInToday] = useState(true);
+  const [showCompletedInToday, setShowCompletedInToday] = useState(true);
+  const [showCompletedInUpcoming, setShowCompletedInUpcoming] = useState(true);
+  const [showCompletedInAll, setShowCompletedInAll] = useState(true);
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<Task | null>(null);
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
   const [statsScope, setStatsScope] = useState<'All' | 'Today'>('Today');
+  const [userName, setUserName] = useState('User');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+  const [viewDate, setViewDate] = useState(new Date());
 
   // Theme colors
   const theme = {
@@ -62,10 +70,16 @@ export default function HomeScreen() {
     }
   }, [tasks]);
 
-  // Load tasks from storage on component mount
+  // Load tasks and user name from storage on component mount
   useEffect(() => {
     loadTasksFromStorage();
+    loadName();
   }, []);
+
+  const loadName = async () => {
+    const name = await loadUserName();
+    setUserName(name);
+  };
 
   // Save tasks whenever they change
   useEffect(() => {
@@ -183,13 +197,19 @@ export default function HomeScreen() {
     let baseFiltered = matchesSearch;
     if (selectedFilter === 'Today') {
       const isOverdueIncluded = showOverdueInToday ? (task.date < todayDate && !task.completed) : false;
-      baseFiltered = matchesSearch && (task.date === todayDate || isOverdueIncluded);
+      const isCompletedIncluded = showCompletedInToday ? true : !task.completed;
+      baseFiltered = matchesSearch && (task.date === todayDate || isOverdueIncluded) && isCompletedIncluded;
     } else if (selectedFilter === 'Upcoming') {
-      baseFiltered = matchesSearch && task.date > todayDate;
+      const isCompletedIncluded = showCompletedInUpcoming ? true : !task.completed;
+      baseFiltered = matchesSearch && task.date > todayDate && isCompletedIncluded;
     } else if (selectedFilter === 'Past') {
       baseFiltered = matchesSearch && task.date < todayDate && !task.completed;
     } else if (selectedFilter === 'Completed') {
       baseFiltered = matchesSearch && task.completed;
+    } else {
+      // All filter
+      const isCompletedIncluded = showCompletedInAll ? true : !task.completed;
+      baseFiltered = matchesSearch && isCompletedIncluded;
     }
 
     // Category filter
@@ -247,14 +267,34 @@ export default function HomeScreen() {
   };
 
   const todayDate = new Date().toISOString().split('T')[0];
-  const statsTasks = statsScope === 'Today' 
-    ? tasks.filter(t => t.date === todayDate) 
-    : tasks;
-
+  const statsTasks = statsScope === 'Today' ? tasks.filter(t => t.date === todayDate) : tasks;
+  
   const completedTasks = statsTasks.filter(t => t.completed).length;
   const totalStatsTasks = statsTasks.length;
   const pendingTasks = totalStatsTasks - completedTasks;
   const completionRate = totalStatsTasks > 0 ? Math.round((completedTasks / totalStatsTasks) * 100) : 0;
+
+  const getCalendarDays = () => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const days = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
+    return days;
+  };
+
+  const changeMonth = (offset: number) => {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1));
+  };
+
+  const handleDateSelect = (day: number) => {
+    const selected = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+    setTaskDate(selected.toISOString().split('T')[0]);
+    setIsDatePickerVisible(false);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -267,9 +307,28 @@ export default function HomeScreen() {
       <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
         <View style={styles.headerOverlay} />
         <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.greeting}>Hello, User! 👋</Text>
-            <Text style={styles.headerTitle}>Let&apos;s be productive today</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {isEditingName ? (
+                <TextInput
+                  style={[styles.nameInput, { color: '#fff' }]}
+                  value={userName}
+                  onChangeText={setUserName}
+                  onBlur={() => {
+                    setIsEditingName(false);
+                    saveUserName(userName);
+                  }}
+                  autoFocus
+                  maxLength={15}
+                />
+              ) : (
+                <TouchableOpacity onPress={() => setIsEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.greeting}>Hello, {userName}! 👋</Text>
+                  <Ionicons name="pencil" size={14} color="rgba(255,255,255,0.6)" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.headerTitle}>DnwTaskMaster</Text>
           </View>
           <TouchableOpacity 
             style={styles.profileButton}
@@ -475,6 +534,30 @@ export default function HomeScreen() {
                   <Text style={[styles.toggleText, { color: showOverdueInToday ? '#fff' : theme.textSecondary }]}>Show Overdue</Text>
                 </TouchableOpacity>
               )}
+              {selectedFilter === 'Today' && (
+                <TouchableOpacity 
+                  style={[styles.toggleBtn, { backgroundColor: showCompletedInToday ? theme.primary : (isDarkMode ? '#334155' : '#F3F4F6') }]} 
+                  onPress={() => setShowCompletedInToday(!showCompletedInToday)}
+                >
+                  <Text style={[styles.toggleText, { color: showCompletedInToday ? '#fff' : theme.textSecondary }]}>Show Completed</Text>
+                </TouchableOpacity>
+              )}
+              {selectedFilter === 'Upcoming' && (
+                <TouchableOpacity 
+                  style={[styles.toggleBtn, { backgroundColor: showCompletedInUpcoming ? theme.primary : (isDarkMode ? '#334155' : '#F3F4F6') }]} 
+                  onPress={() => setShowCompletedInUpcoming(!showCompletedInUpcoming)}
+                >
+                  <Text style={[styles.toggleText, { color: showCompletedInUpcoming ? '#fff' : theme.textSecondary }]}>Show Completed</Text>
+                </TouchableOpacity>
+              )}
+              {selectedFilter === 'All' && (
+                <TouchableOpacity 
+                  style={[styles.toggleBtn, { backgroundColor: showCompletedInAll ? theme.primary : (isDarkMode ? '#334155' : '#F3F4F6') }]} 
+                  onPress={() => setShowCompletedInAll(!showCompletedInAll)}
+                >
+                  <Text style={[styles.toggleText, { color: showCompletedInAll ? '#fff' : theme.textSecondary }]}>Show Completed</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={[styles.viewAllButton, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5' }]}>
                 <Text style={[styles.seeAllText, { color: theme.primary }]}>View All</Text>
                 <Ionicons name="arrow-forward" size={16} color={theme.primary} />
@@ -581,6 +664,23 @@ export default function HomeScreen() {
           )}
         </View>
 
+        <View style={styles.attributionContainer}>
+          <Text style={[styles.attributionText, { color: theme.textSecondary }]}>
+            DnwTaskMaster v1.0
+          </Text>
+          <Text style={[styles.creatorText, { color: theme.primary }]}>
+            Developed by dilushadnw
+          </Text>
+          
+          <TouchableOpacity 
+            style={[styles.contactButton, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}
+            onPress={() => Linking.openURL('https://linktr.ee/dilushadnw')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="link-outline" size={16} color={theme.primary} />
+            <Text style={[styles.contactButtonText, { color: theme.text }]}>Get In Touch</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -663,17 +763,18 @@ export default function HomeScreen() {
                 </View>
               </View>
               <View style={styles.inputContainer}>
-                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Date (YYYY-MM-DD)</Text>
-                <View style={[styles.modalInput, { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.bg, borderColor: theme.border }]}>
-                  <Ionicons name="calendar-outline" size={20} color={theme.textSecondary} style={{ marginRight: 10 }} />
-                  <TextInput
-                    style={{ flex: 1, color: theme.text, fontSize: 16, fontWeight: '500' }}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={theme.textSecondary}
-                    value={taskDate}
-                    onChangeText={setTaskDate}
-                  />
-                </View>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Date</Text>
+                <TouchableOpacity 
+                  style={[styles.modalInput, { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.bg, borderColor: theme.border }]}
+                  onPress={() => setIsDatePickerVisible(true)}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={theme.primary} style={{ marginRight: 10 }} />
+                  <Text style={{ flex: 1, color: theme.text, fontSize: 16, fontWeight: '500' }}>
+                    {getDayLabel(taskDate)} ({taskDate})
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
+                </TouchableOpacity>
+                
                 <View style={styles.datePresets}>
                   <TouchableOpacity 
                     style={[styles.presetBtn, taskDate === new Date().toISOString().split('T')[0] && { backgroundColor: theme.primary, borderColor: theme.primary }]}
@@ -840,6 +941,67 @@ export default function HomeScreen() {
               onPress={() => setSelectedTaskDetail(null)}
             >
               <Text style={styles.submitButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Custom Calendar Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isDatePickerVisible}
+        onRequestClose={() => setIsDatePickerVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setIsDatePickerVisible(false)}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity onPress={() => changeMonth(-1)}>
+                <Ionicons name="chevron-back" size={24} color={theme.primary} />
+              </TouchableOpacity>
+              <Text style={[styles.calendarMonthText, { color: theme.text }]}>
+                {viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </Text>
+              <TouchableOpacity onPress={() => changeMonth(1)}>
+                <Ionicons name="chevron-forward" size={24} color={theme.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarWeekDays}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                <Text key={i} style={[styles.weekDayText, { color: theme.textSecondary }]}>{day}</Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {getCalendarDays().map((day, i) => (
+                <TouchableOpacity
+                  key={i}
+                  disabled={day === null}
+                  style={[
+                    styles.calendarDay,
+                    day !== null && taskDate === new Date(viewDate.getFullYear(), viewDate.getMonth(), day).toISOString().split('T')[0] && 
+                    { backgroundColor: theme.primary, borderRadius: 10 }
+                  ]}
+                  onPress={() => day && handleDateSelect(day)}
+                >
+                  <Text style={[
+                    styles.dayText,
+                    { color: day === null ? 'transparent' : theme.text },
+                    day !== null && taskDate === new Date(viewDate.getFullYear(), viewDate.getMonth(), day).toISOString().split('T')[0] && 
+                    { color: '#fff' }
+                  ]}>
+                    {day}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.submitButton, { backgroundColor: isDarkMode ? '#334155' : '#F3F4F6', marginTop: 20 }]}
+              onPress={() => setIsDatePickerVisible(false)}
+            >
+              <Text style={[styles.submitButtonText, { color: theme.text }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -1562,5 +1724,81 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
     zIndex: 999,
+  },
+  nameInput: {
+    fontSize: 16,
+    fontWeight: '500',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    minWidth: 80,
+  },
+  attributionContainer: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    gap: 4,
+  },
+  attributionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.6,
+  },
+  creatorText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  calendarMonthText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  calendarWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 10,
+  },
+  weekDayText: {
+    fontSize: 12,
+    fontWeight: '700',
+    width: 40,
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  calendarDay: {
+    width: '14.28%',
+    height: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  contactButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
