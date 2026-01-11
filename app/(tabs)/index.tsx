@@ -1,20 +1,30 @@
-import { Task, loadTasks, loadUserName, saveTasks, saveUserName } from '@/utils/storage';
+import {
+  Task,
+  loadCategories,
+  loadTasks,
+  loadThemePreference,
+  loadUserName,
+  saveCategories,
+  saveTasks,
+  saveThemePreference,
+  saveUserName
+} from '@/utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Linking,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 
@@ -49,16 +59,21 @@ export default function HomeScreen() {
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
   const [viewDate, setViewDate] = useState(new Date());
 
-  // Theme colors
+  // Theme colors - Professional Palette
   const theme = {
-    bg: isDarkMode ? '#0F172A' : '#F9FAFB',
-    cardBg: isDarkMode ? '#1E293B' : '#fff',
-    primary: isDarkMode ? '#10B981' : '#10B981',
-    primaryDark: isDarkMode ? '#059669' : '#059669',
-    text: isDarkMode ? '#F1F5F9' : '#1F2937',
-    textSecondary: isDarkMode ? '#94A3B8' : '#6B7280',
-    border: isDarkMode ? '#334155' : '#F3F4F6',
-    headerBg: isDarkMode ? '#1E293B' : '#10B981',
+    bg: isDarkMode ? '#0F172A' : '#F8FAFC', // Slate 900 / Slate 50
+    cardBg: isDarkMode ? '#1E293B' : '#FFFFFF', // Slate 800 / White
+    primary: '#10B981', // Emerald 500
+    primaryDark: '#059669', // Emerald 600
+    accent: '#3B82F6', // Blue 500
+    text: isDarkMode ? '#F1F5F9' : '#0F172A', // Slate 100 / Slate 900
+    textSecondary: isDarkMode ? '#94A3B8' : '#64748B', // Slate 400 / Slate 500
+    border: isDarkMode ? '#334155' : '#E2E8F0', // Slate 700 / Slate 200
+    headerBg: isDarkMode ? '#111827' : '#10B981', // Gray 900 / Emerald 500
+    success: '#10B981',
+    warning: '#F59E0B',
+    danger: '#EF4444',
+    info: '#3B82F6',
   };
 
   const saveTasksToStorage = useCallback(async () => {
@@ -70,23 +85,43 @@ export default function HomeScreen() {
     }
   }, [tasks]);
 
-  // Load tasks and user name from storage on component mount
+  // Load data from storage on component mount
   useEffect(() => {
-    loadTasksFromStorage();
-    loadName();
+    const initApp = async () => {
+      await loadTasksFromStorage();
+      await loadUserInfo();
+    };
+    initApp();
   }, []);
 
-  const loadName = async () => {
+  const loadUserInfo = async () => {
     const name = await loadUserName();
+    const storedCategories = await loadCategories();
+    const isDark = await loadThemePreference();
+    
     setUserName(name);
+    setCategories(storedCategories);
+    setIsDarkMode(isDark);
   };
 
-  // Save tasks whenever they change
+  // Persist data whenever it changes
   useEffect(() => {
     if (!isLoading) {
       saveTasksToStorage();
     }
   }, [tasks, isLoading, saveTasksToStorage]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveCategories(categories);
+    }
+  }, [categories, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveThemePreference(isDarkMode);
+    }
+  }, [isDarkMode, isLoading]);
 
   const loadTasksFromStorage = async () => {
     try {
@@ -212,10 +247,7 @@ export default function HomeScreen() {
       baseFiltered = matchesSearch && isCompletedIncluded;
     }
 
-    // Category filter
-    const matchesCategory = selectedCategory === 'All' || task.category === selectedCategory;
-
-    return baseFiltered && matchesCategory;
+    return baseFiltered;
   }).sort((a, b) => a.date.localeCompare(b.date));
 
   const addNewCategory = () => {
@@ -308,7 +340,7 @@ export default function HomeScreen() {
         <View style={styles.headerOverlay} />
         <View style={styles.headerContent}>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {isEditingName ? (
                 <TextInput
                   style={[styles.nameInput, { color: '#fff' }]}
@@ -322,34 +354,37 @@ export default function HomeScreen() {
                   maxLength={15}
                 />
               ) : (
-                <TouchableOpacity onPress={() => setIsEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={styles.greeting}>Hello, {userName}! 👋</Text>
-                  <Ionicons name="pencil" size={14} color="rgba(255,255,255,0.6)" />
+                <TouchableOpacity 
+                  onPress={() => setIsEditingName(true)} 
+                  style={styles.greetingTouch}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.greeting}>Hello, {userName} 👋</Text>
+                  <Ionicons name="pencil-sharp" size={14} color="rgba(255,255,255,0.7)" />
                 </TouchableOpacity>
               )}
             </View>
             <Text style={styles.headerTitle}>DnwTaskMaster</Text>
           </View>
           <TouchableOpacity 
-            style={styles.profileButton}
+            style={[styles.profileButton, { backgroundColor: 'rgba(255,255,255,0.15)' }]}
             onPress={toggleDarkMode}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
             <Ionicons 
               name={isDarkMode ? "sunny" : "moon"} 
-              size={28} 
+              size={22} 
               color="#fff" 
             />
           </TouchableOpacity>
         </View>
 
-
         {/* Search Bar */}
-        <View style={[styles.searchContainer, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-          <Ionicons name="search" size={20} color={theme.primary} style={styles.searchIcon} />
+        <View style={[styles.searchContainer, { backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : '#fff' }]}>
+          <Ionicons name="search" size={20} color={isDarkMode ? theme.primary : '#64748B'} style={styles.searchIcon} />
           <TextInput
             placeholder="Search tasks..."
-            placeholderTextColor={theme.textSecondary}
+            placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
             style={[styles.searchInput, { color: theme.text }]}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -454,62 +489,27 @@ export default function HomeScreen() {
                 key={filter}
                 style={[
                   styles.quickActionButton,
-                  { backgroundColor: theme.cardBg, borderColor: isActive ? theme.primary : theme.border, minWidth: 100 },
-                  isActive && { borderWidth: 1.5 }
+                  { backgroundColor: theme.cardBg },
+                  isActive && { backgroundColor: theme.primary, borderColor: theme.primary }
                 ]}
                 onPress={() => setSelectedFilter(filter)}
+                activeOpacity={0.8}
               >
-                <View style={[
-                  styles.quickActionIcon,
-                  { backgroundColor: isActive ? theme.primary : (isDarkMode ? '#1E3A2F' : '#ECFDF5') }
-                ]}>
-                  <Text style={[
-                    { fontWeight: '800', fontSize: 14 },
-                    { color: isActive ? '#fff' : theme.primary }
-                  ]}>{count}</Text>
-                </View>
                 <Text style={[
                   styles.quickActionText,
-                  { color: isActive ? theme.text : theme.textSecondary, fontSize: 12 }
+                  { color: isActive ? '#fff' : theme.textSecondary }
                 ]}>{filter}</Text>
+                {count > 0 && (
+                  <View style={[styles.filterBadge, { backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : theme.border }]}>
+                    <Text style={[styles.filterBadgeText, { color: isActive ? '#fff' : theme.textSecondary }]}>{count}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        {/* Category Filter Tabs */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={[styles.filterTabsWrapper, { marginTop: 0 }]}
-          contentContainerStyle={styles.filterTabsContent}
-        >
-          <TouchableOpacity
-            style={[styles.catFilterButton, { backgroundColor: theme.cardBg, borderColor: theme.border }]}
-            onPress={() => setIsCategoryModalVisible(true)}
-          >
-            <Ionicons name="settings-outline" size={18} color={theme.primary} />
-          </TouchableOpacity>
-          {['All', ...categories].map((cat) => {
-            const isActive = selectedCategory === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                style={[
-                  styles.catFilterButton,
-                  { backgroundColor: theme.cardBg, borderColor: isActive ? theme.primary : theme.border },
-                  isActive && { borderWidth: 1.5 }
-                ]}
-                onPress={() => setSelectedCategory(cat)}
-              >
-                <Text style={[
-                  styles.catFilterText,
-                  { color: isActive ? theme.text : theme.textSecondary }
-                ]}>{cat}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+
 
         {/* Tasks Section */}
         <View style={styles.tasksSection}>
@@ -539,7 +539,7 @@ export default function HomeScreen() {
                   style={[styles.toggleBtn, { backgroundColor: showCompletedInToday ? theme.primary : (isDarkMode ? '#334155' : '#F3F4F6') }]} 
                   onPress={() => setShowCompletedInToday(!showCompletedInToday)}
                 >
-                  <Text style={[styles.toggleText, { color: showCompletedInToday ? '#fff' : theme.textSecondary }]}>Show Completed</Text>
+                  <Text style={[styles.toggleText, { color: showCompletedInToday ? '#fff' : theme.textSecondary }]}>Show Done</Text>
                 </TouchableOpacity>
               )}
               {selectedFilter === 'Upcoming' && (
@@ -610,53 +610,40 @@ export default function HomeScreen() {
                     </Text>
                     {task.description ? (
                       <TouchableOpacity onPress={() => setSelectedTaskDetail(task)}>
-                        <Text style={[styles.taskDescriptionText, { color: theme.textSecondary }]} numberOfLines={2}>
+                        <Text style={[styles.taskDescriptionText, { color: theme.textSecondary }]} numberOfLines={1}>
                           {task.description}
                         </Text>
-                        <Text style={{ fontSize: 11, color: theme.primary, fontWeight: '700', marginTop: -4 }}>Tap to see more...</Text>
                       </TouchableOpacity>
                     ) : null}
                     <View style={styles.taskMeta}>
-                      {task.date < new Date().toISOString().split('T')[0] && !task.completed && (
-                        <View style={styles.overdueBadge}>
-                          <Text style={styles.overdueText}>OVERDUE</Text>
-                        </View>
-                      )}
-                      <View style={[styles.categoryBadge, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5', borderColor: isDarkMode ? '#10B981' : '#D1FAE5' }]}>
+                      <View style={[styles.categoryBadge, { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.1)' : '#F1F5F9' }]}>
                         <Text style={[styles.categoryText, { color: theme.primary }]}>{task.category}</Text>
                       </View>
                       <View style={styles.taskMetaRight}>
                         <View style={styles.dateBadge}>
-                          <Ionicons name="calendar-outline" size={12} color={theme.textSecondary} style={{ marginRight: 4 }} />
+                          <Ionicons name="calendar-outline" size={12} color={theme.textSecondary} />
                           <Text style={[styles.dateText, { color: theme.textSecondary }]}>{getDayLabel(task.date)}</Text>
                         </View>
-                        <View style={[
-                          styles.priorityIndicator,
-                          task.priority === 'high' && styles.priorityHigh,
-                          task.priority === 'medium' && styles.priorityMedium,
-                          task.priority === 'low' && styles.priorityLow,
-                        ]}>
-                          <Text style={styles.priorityText}>
-                            {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                          </Text>
-                        </View>
+                        {task.date < new Date().toISOString().split('T')[0] && !task.completed && (
+                          <View style={[styles.statusTag, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                            <Text style={[styles.statusTagText, { color: theme.danger }]}>OVERDUE</Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   </View>
                 </View>
 
                 <View style={styles.taskActions}>
+                  <View style={[
+                    styles.priorityLine, 
+                    { backgroundColor: task.priority === 'high' ? theme.danger : task.priority === 'medium' ? theme.warning : theme.success }
+                  ]} />
                   <TouchableOpacity 
-                    style={[styles.taskActionButton, { backgroundColor: isDarkMode ? '#334155' : '#F9FAFB' }]}
+                    style={[styles.taskActionButton, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }]}
                     onPress={() => openEditModal(task)}
                   >
-                    <Ionicons name="create-outline" size={20} color={theme.textSecondary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.taskActionButton, { backgroundColor: isDarkMode ? '#450a0a' : '#FEF2F2' }]}
-                    onPress={() => deleteTask(task.id)}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    <Ionicons name="ellipsis-vertical" size={18} color={theme.textSecondary} />
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -761,6 +748,13 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                <TouchableOpacity 
+                  style={[styles.manageCategoriesBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: theme.border }]}
+                  onPress={() => setIsCategoryModalVisible(true)}
+                >
+                  <Ionicons name="settings-outline" size={16} color={theme.primary} />
+                  <Text style={[styles.manageCategoriesText, { color: theme.primary }]}>Manage Categories</Text>
+                </TouchableOpacity>
               </View>
               <View style={styles.inputContainer}>
                 <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Date</Text>
@@ -824,14 +818,27 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity 
-                style={[styles.submitButton, { backgroundColor: theme.primary }]}
-                onPress={handleAddTask}
-              >
-                <Text style={styles.submitButtonText}>
-                  {editingTask ? 'Update Task' : 'Add Task'}
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                {editingTask && (
+                  <TouchableOpacity 
+                    style={[styles.submitButton, { flex: 1, backgroundColor: theme.danger }]}
+                    onPress={() => {
+                      deleteTask(editingTask.id);
+                      resetForm();
+                    }}
+                  >
+                    <Text style={styles.submitButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                  style={[styles.submitButton, { flex: 2, backgroundColor: theme.primary }]}
+                  onPress={handleAddTask}
+                >
+                  <Text style={styles.submitButtonText}>
+                    {editingTask ? 'Update Task' : 'Add Task'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </Pressable>
           </KeyboardAvoidingView>
         </Pressable>
@@ -1006,6 +1013,78 @@ export default function HomeScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Category Management Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isCategoryModalVisible}
+        onRequestClose={() => setIsCategoryModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setIsCategoryModalVisible(false)}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContainer}
+          >
+            <Pressable style={[styles.modalContent, { backgroundColor: theme.cardBg }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  Manage Categories
+                </Text>
+                <TouchableOpacity onPress={() => setIsCategoryModalVisible(false)}>
+                  <Ionicons name="close" size={24} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ maxHeight: 400 }}>
+                <View style={styles.inputContainer}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Add New Category</Text>
+                  <View style={styles.addCategoryRow}>
+                    <TextInput
+                      style={[styles.modalInput, { flex: 1, backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
+                      placeholder="Category name..."
+                      placeholderTextColor={theme.textSecondary}
+                      value={newCategoryName}
+                      onChangeText={setNewCategoryName}
+                    />
+                    <TouchableOpacity 
+                      style={[styles.addCategoryBtn, { backgroundColor: theme.primary }]}
+                      onPress={addNewCategory}
+                    >
+                      <Ionicons name="add" size={24} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Your Categories</Text>
+                  {categories.map((cat) => (
+                    <View 
+                      key={cat} 
+                      style={[styles.categoryItem, { borderBottomColor: theme.border }]}
+                    >
+                      <Text style={[styles.categoryItemText, { color: theme.text }]}>{cat}</Text>
+                      <TouchableOpacity 
+                        onPress={() => deleteCategory(cat)}
+                        style={{ padding: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={20} color={theme.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity 
+                style={[styles.submitButton, { backgroundColor: theme.primary, marginTop: 20 }]}
+                onPress={() => setIsCategoryModalVisible(false)}
+              >
+                <Text style={styles.submitButtonText}>Done</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1013,76 +1092,72 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: '#10B981',
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 24,
+    paddingBottom: 30,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 12,
-    position: 'relative',
+    borderBottomLeftRadius: 35,
+    borderBottomRightRadius: 35,
     overflow: 'hidden',
   },
   headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#059669',
-    opacity: 0.3,
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 25,
     zIndex: 1,
   },
+  greetingTouch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   greeting: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#fff',
-    opacity: 0.95,
-    fontWeight: '500',
-    letterSpacing: 0.3,
+    opacity: 0.9,
+    fontWeight: '600',
   },
   headerTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '900',
     color: '#fff',
-    marginTop: 6,
     letterSpacing: -0.5,
+  },
+  nameInput: {
+    fontSize: 15,
+    fontWeight: '700',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    minWidth: 100,
   },
   profileButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 18,
     paddingHorizontal: 16,
-    height: 54,
+    height: 55,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 4,
-    zIndex: 1,
   },
   searchIcon: {
     marginRight: 12,
@@ -1090,193 +1165,220 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#1F2937',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  filterButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ECFDF5',
+  collapsibleStats: {
+    marginTop: -20,
+    marginHorizontal: 20,
+    borderRadius: 24,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+    zIndex: 10,
+    borderBottomWidth: 1,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
+  },
+  statsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statsDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statsHeaderText: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  statsScopeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  statsScopeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  statsExpandedContent: {
+    marginTop: 20,
+    gap: 20,
+  },
+  statsScopeSelector: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  scopeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  scopeBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  miniStatCard: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  miniStatNumber: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  miniStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginTop: 24,
-    gap: 14,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 20,
-    padding: 18,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  statCardGreen: {
-    backgroundColor: '#10B981',
-  },
-  statCardWhite: {
-    backgroundColor: '#fff',
-  },
-  statCardShine: {
-    position: 'absolute',
-    top: -50,
-    right: -50,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  statIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  filterTabsWrapper: {
+    marginTop: 20,
     marginBottom: 10,
   },
-  statIconGreen: {
-    backgroundColor: '#ECFDF5',
-  },
-  statNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 4,
-    letterSpacing: -1,
-  },
-  statNumberDark: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginTop: 4,
-    letterSpacing: -1,
-  },
-  statLabel: {
-    fontSize: 13,
-    color: '#fff',
-    opacity: 0.95,
-    marginTop: 4,
-    fontWeight: '600',
-  },
-  statLabelDark: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 4,
-    fontWeight: '600',
-  },
-  quickActionsContainer: {
-    flexDirection: 'row',
+  filterTabsContent: {
     paddingHorizontal: 20,
-    marginTop: 24,
-    gap: 12,
+    gap: 10,
   },
   quickActionButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 18,
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    gap: 8,
   },
   quickActionText: {
-    fontSize: 12,
-    color: '#1F2937',
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  filterBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  catFilterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  catFilterText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   tasksSection: {
     paddingHorizontal: 20,
-    marginTop: 28,
+    marginTop: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   sectionTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: '900',
     letterSpacing: -0.5,
   },
   sectionSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    fontWeight: '600',
     marginTop: 2,
-    fontWeight: '500',
+  },
+  toggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  toggleText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    gap: 4,
+    gap: 6,
   },
   seeAllText: {
     fontSize: 13,
-    color: '#10B981',
+    fontWeight: '800',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 15,
+  },
+  emptyText: {
+    fontSize: 16,
     fontWeight: '700',
   },
   taskCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14,
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1.5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 3,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
   },
   taskLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
+    gap: 12,
   },
   checkbox: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2.5,
-    borderColor: '#D1D5DB',
+    width: 26,
+    height: 26,
+    borderRadius: 10,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
-    backgroundColor: '#fff',
+    marginTop: 2,
   },
   checkboxCompleted: {
     backgroundColor: '#10B981',
@@ -1286,15 +1388,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   taskTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-    letterSpacing: -0.2,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   taskTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: '#9CA3AF',
+    opacity: 0.6,
+  },
+  taskDescriptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 12,
+    lineHeight: 18,
   },
   taskMeta: {
     flexDirection: 'row',
@@ -1304,138 +1411,151 @@ const styles = StyleSheet.create({
   taskMetaRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   categoryBadge: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
   },
   categoryText: {
     fontSize: 11,
-    color: '#059669',
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
-  priorityIndicator: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+  dateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  priorityText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+  dateText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  priorityHigh: {
-    backgroundColor: '#FEE2E2',
+  statusTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  priorityMedium: {
-    backgroundColor: '#FEF3C7',
-  },
-  priorityLow: {
-    backgroundColor: '#D1FAE5',
+  statusTagText: {
+    fontSize: 9,
+    fontWeight: '900',
   },
   taskActions: {
     flexDirection: 'row',
-    gap: 8,
-    marginLeft: 8,
+    alignItems: 'center',
+    gap: 10,
+    marginLeft: 10,
+  },
+  priorityLine: {
+    width: 4,
+    height: 30,
+    borderRadius: 2,
   },
   taskActionButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addButton: {
-    marginHorizontal: 20,
-    marginTop: 28,
-    borderRadius: 20,
-    backgroundColor: '#10B981',
-    overflow: 'hidden',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+  attributionContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 8,
   },
-  addButtonContent: {
+  attributionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  creatorText: {
+    fontSize: 13,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  contactButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 18,
+    gap: 8,
     paddingHorizontal: 20,
-    gap: 14,
+    paddingVertical: 10,
+    borderRadius: 25,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
   },
-  addIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addButtonTextContainer: {
-    flex: 1,
-  },
-  addButtonTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: -0.3,
-  },
-  addButtonSubtitle: {
-    color: '#fff',
-    fontSize: 12,
-    opacity: 0.9,
-    marginTop: 2,
-    fontWeight: '500',
+  contactButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
   },
   bottomSpacer: {
-    height: 40,
+    height: 100,
+  },
+  floatingAddButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 25,
+    width: 68,
+    height: 68,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 8,
+    zIndex: 999,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
     justifyContent: 'flex-end',
   },
   modalContainer: {
     width: '100%',
   },
   modalContent: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    borderTopLeftRadius: 35,
+    borderTopRightRadius: 35,
+    padding: 25,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 25,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 25,
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
   inputContainer: {
     marginBottom: 20,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 8,
+    marginLeft: 4,
   },
   modalInput: {
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 16,
+    height: 55,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    paddingHorizontal: 20,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  textArea: {
+    height: 100,
+    paddingTop: 15,
+    textAlignVertical: 'top',
   },
   categoryPicker: {
     flexDirection: 'row',
@@ -1445,169 +1565,75 @@ const styles = StyleSheet.create({
   catOption: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
   catOptionText: {
     fontSize: 14,
-    fontWeight: '600',
-  },
-  priorityPicker: {
-    flexDirection: 'row',
-    gap: 12,
+    fontWeight: '700',
   },
   prioOption: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderRadius: 14,
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
   prioOptionText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  priorityPicker: {
+    flexDirection: 'row',
+    gap: 10,
   },
   submitButton: {
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
+    height: 55,
+    borderRadius: 18,
     justifyContent: 'center',
-    marginTop: 10,
-    shadowColor: '#10B981',
+    alignItems: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+    marginTop: 10,
   },
   submitButtonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: 'bold',
-  },
-  dateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  dateText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  datePresets: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  presetBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: 'transparent',
-  },
-  presetText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  emptyContainer: {
-    paddingVertical: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    opacity: 0.8,
-  },
-  filterTabsWrapper: {
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  filterTabsContent: {
-    paddingHorizontal: 20,
-    gap: 12,
-    alignItems: 'center',
-  },
-  overdueBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  overdueText: {
-    color: '#EF4444',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  textArea: {
-    height: 100,
-    paddingTop: 12,
-  },
-  taskDescriptionText: {
-    fontSize: 14,
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-  catFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#fff',
-    minWidth: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  catFilterText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   addCategoryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
-    marginTop: 12,
   },
   addCategoryBtn: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  toggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  toggleText: {
-    fontSize: 11,
-    fontWeight: '700',
   },
   categoryItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 15,
     borderBottomWidth: 1,
   },
   categoryItemText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   detailTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 10,
+    fontSize: 22,
+    fontWeight: '900',
     marginBottom: 15,
   },
   detailMetaRow: {
@@ -1615,140 +1641,32 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 20,
   },
+  priorityIndicator: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  priorityHigh: { backgroundColor: '#FEE2E2' },
+  priorityMedium: { backgroundColor: '#FEF3C7' },
+  priorityLow: { backgroundColor: '#D1FAE5' },
+  priorityText: { fontSize: 11, fontWeight: '800' },
   detailSection: {
     paddingVertical: 15,
   },
   detailLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   detailDescription: {
     fontSize: 16,
     lineHeight: 24,
+    fontWeight: '500',
   },
   detailDate: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  collapsibleStats: {
-    borderBottomWidth: 1,
-    zIndex: 10,
-  },
-  statsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  statsHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statsDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statsHeaderText: {
-    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  statsScopeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  statsScopeText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  statsExpandedContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  statsScopeSelector: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 15,
-  },
-  scopeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  scopeBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  miniStatCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 12,
-  },
-  miniStatNumber: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  miniStatLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  floatingAddButton: {
-    position: 'absolute',
-    bottom: 30,
-    right: 20,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 999,
-  },
-  nameInput: {
-    fontSize: 16,
-    fontWeight: '500',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    minWidth: 80,
-  },
-  attributionContainer: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    gap: 4,
-  },
-  attributionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    opacity: 0.6,
-  },
-  creatorText: {
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -1758,7 +1676,7 @@ const styles = StyleSheet.create({
   },
   calendarMonthText: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '900',
   },
   calendarWeekDays: {
     flexDirection: 'row',
@@ -1767,14 +1685,13 @@ const styles = StyleSheet.create({
   },
   weekDayText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     width: 40,
     textAlign: 'center',
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
   },
   calendarDay: {
     width: '14.28%',
@@ -1784,20 +1701,37 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  contactButton: {
+  datePresets: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  presetBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  presetText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  manageCategoriesBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginTop: 8,
+    borderRadius: 12,
+    marginTop: 12,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
   },
-  contactButtonText: {
+  manageCategoriesText: {
     fontSize: 14,
     fontWeight: '700',
   },

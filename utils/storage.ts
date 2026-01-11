@@ -1,30 +1,6 @@
-// Temporary storage implementation until AsyncStorage is installed
-// TODO: Replace with actual AsyncStorage after running: npm install @react-native-async-storage/async-storage
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TASKS_STORAGE_KEY = '@DnwTaskMaster:tasks';
-
-// Fallback storage for web/development
-const AsyncStorageFallback = {
-  async setItem(key: string, value: string): Promise<void> {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(key, value);
-    }
-  },
-  async getItem(key: string): Promise<string | null> {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return localStorage.getItem(key);
-    }
-    return null;
-  },
-  async removeItem(key: string): Promise<void> {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem(key);
-    }
-  },
-};
-
-// Use fallback storage for now
-const AsyncStorage = AsyncStorageFallback;
 
 export interface Task {
   id: string;
@@ -160,5 +136,46 @@ export const loadUserName = async (): Promise<string> => {
   } catch (error) {
     console.error('Error loading user name:', error);
     return 'User';
+  }
+};
+
+const CATEGORIES_KEY = '@DnwTaskMaster:categories';
+
+export const saveCategories = async (categories: string[]): Promise<void> => {
+  try {
+    const jsonValue = JSON.stringify(categories);
+    await AsyncStorage.setItem(CATEGORIES_KEY, jsonValue);
+  } catch (error) {
+    console.error('Error saving categories:', error);
+  }
+};
+
+export const loadCategories = async (): Promise<string[]> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(CATEGORIES_KEY);
+    return jsonValue != null ? JSON.parse(jsonValue) : ['Work', 'Design', 'Meeting', 'Personal', 'Development'];
+  } catch (error) {
+    console.error('Error loading categories:', error);
+    return ['Work', 'Design', 'Meeting', 'Personal', 'Development'];
+  }
+};
+
+const THEME_KEY = '@DnwTaskMaster:is_dark_mode';
+
+export const saveThemePreference = async (isDarkMode: boolean): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(THEME_KEY, isDarkMode ? 'true' : 'false');
+  } catch (error) {
+    console.error('Error saving theme:', error);
+  }
+};
+
+export const loadThemePreference = async (): Promise<boolean> => {
+  try {
+    const value = await AsyncStorage.getItem(THEME_KEY);
+    return value === 'true';
+  } catch (error) {
+    console.error('Error loading theme:', error);
+    return false;
   }
 };
