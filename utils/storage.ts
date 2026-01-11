@@ -11,6 +11,7 @@ export interface Task {
   createdAt: string;
   date: string;
   description?: string;
+  completedAt?: string;
 }
 
 /**
@@ -97,9 +98,17 @@ export const deleteTask = async (taskId: string): Promise<void> => {
 export const toggleTaskCompletion = async (taskId: string): Promise<void> => {
   try {
     const tasks = await loadTasks();
-    const updatedTasks = tasks.map(task =>
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    );
+    const updatedTasks = tasks.map(task => {
+      if (task.id === taskId) {
+        const isCompleted = !task.completed;
+        return { 
+          ...task, 
+          completed: isCompleted,
+          completedAt: isCompleted ? new Date().toISOString() : undefined
+        };
+      }
+      return task;
+    });
     await saveTasks(updatedTasks);
   } catch (error) {
     console.error('Error toggling task:', error);
@@ -177,5 +186,45 @@ export const loadThemePreference = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error loading theme:', error);
     return false;
+  }
+};
+
+const UI_PREFS_KEY = '@DnwTaskMaster:ui_prefs';
+
+export interface UIPrefs {
+  showOverdueInToday: boolean;
+  showCompletedInToday: boolean;
+  showCompletedInUpcoming: boolean;
+  showCompletedInAll: boolean;
+  isDashboardExpanded: boolean;
+}
+
+export const saveUIPrefs = async (prefs: UIPrefs): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs));
+  } catch (error) {
+    console.error('Error saving UI prefs:', error);
+  }
+};
+
+export const loadUIPrefs = async (): Promise<UIPrefs> => {
+  try {
+    const value = await AsyncStorage.getItem(UI_PREFS_KEY);
+    return value != null ? JSON.parse(value) : {
+      showOverdueInToday: true,
+      showCompletedInToday: true,
+      showCompletedInUpcoming: true,
+      showCompletedInAll: true,
+      isDashboardExpanded: false,
+    };
+  } catch (error) {
+    console.error('Error loading UI prefs:', error);
+    return {
+      showOverdueInToday: true,
+      showCompletedInToday: true,
+      showCompletedInUpcoming: true,
+      showCompletedInAll: true,
+      isDashboardExpanded: false,
+    };
   }
 };

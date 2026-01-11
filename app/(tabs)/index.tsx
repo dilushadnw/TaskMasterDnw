@@ -3,10 +3,12 @@ import {
   loadCategories,
   loadTasks,
   loadThemePreference,
+  loadUIPrefs,
   loadUserName,
   saveCategories,
   saveTasks,
   saveThemePreference,
+  saveUIPrefs,
   saveUserName
 } from '@/utils/storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,12 +54,11 @@ export default function HomeScreen() {
   const [showCompletedInUpcoming, setShowCompletedInUpcoming] = useState(true);
   const [showCompletedInAll, setShowCompletedInAll] = useState(true);
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<Task | null>(null);
-  const [isStatsExpanded, setIsStatsExpanded] = useState(false);
-  const [statsScope, setStatsScope] = useState<'All' | 'Today'>('Today');
   const [userName, setUserName] = useState('User');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
   const [viewDate, setViewDate] = useState(new Date());
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
 
   // Theme colors - Professional Palette
   const theme = {
@@ -98,10 +99,18 @@ export default function HomeScreen() {
     const name = await loadUserName();
     const storedCategories = await loadCategories();
     const isDark = await loadThemePreference();
+    const uiPrefs = await loadUIPrefs();
     
     setUserName(name);
     setCategories(storedCategories);
     setIsDarkMode(isDark);
+    
+    // Load UI Prefs
+    setShowOverdueInToday(uiPrefs.showOverdueInToday);
+    setShowCompletedInToday(uiPrefs.showCompletedInToday);
+    setShowCompletedInUpcoming(uiPrefs.showCompletedInUpcoming);
+    setShowCompletedInAll(uiPrefs.showCompletedInAll);
+    setIsDashboardExpanded(uiPrefs.isDashboardExpanded);
   };
 
   // Persist data whenever it changes
@@ -123,22 +132,29 @@ export default function HomeScreen() {
     }
   }, [isDarkMode, isLoading]);
 
+  useEffect(() => {
+    if (!isLoading) {
+      saveUIPrefs({
+        showOverdueInToday,
+        showCompletedInToday,
+        showCompletedInUpcoming,
+        showCompletedInAll,
+        isDashboardExpanded,
+      });
+    }
+  }, [
+    showOverdueInToday, 
+    showCompletedInToday, 
+    showCompletedInUpcoming, 
+    showCompletedInAll, 
+    isDashboardExpanded, 
+    isLoading
+  ]);
+
   const loadTasksFromStorage = async () => {
     try {
       const storedTasks = await loadTasks();
-      if (storedTasks.length > 0) {
-        setTasks(storedTasks);
-      } else {
-        // If no tasks in storage, use default tasks
-        const defaultTasks: Task[] = [
-          { id: '1', title: 'Complete project proposal', category: 'Work', completed: false, priority: 'high', createdAt: new Date().toISOString(), date: new Date().toISOString().split('T')[0] },
-          { id: '2', title: 'Review design mockups', category: 'Design', completed: true, priority: 'medium', createdAt: new Date().toISOString(), date: new Date().toISOString().split('T')[0] },
-          { id: '3', title: 'Team meeting at 3 PM', category: 'Meeting', completed: false, priority: 'high', createdAt: new Date().toISOString(), date: new Date().toISOString().split('T')[0] },
-          { id: '4', title: 'Update documentation', category: 'Work', completed: false, priority: 'low', createdAt: new Date().toISOString(), date: new Date().toISOString().split('T')[0] },
-          { id: '5', title: 'Code review session', category: 'Development', completed: true, priority: 'medium', createdAt: new Date().toISOString(), date: new Date().toISOString().split('T')[0] },
-        ];
-        setTasks(defaultTasks);
-      }
+      setTasks(storedTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
       Alert.alert('Error', 'Failed to load tasks from storage');
@@ -148,9 +164,17 @@ export default function HomeScreen() {
   };
 
   const toggleTask = (id: string) => {
-    setTasks(tasks.map(task => 
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ));
+    setTasks(tasks.map(task => {
+      if (task.id === id) {
+        const isNowCompleted = !task.completed;
+        return { 
+          ...task, 
+          completed: isNowCompleted,
+          completedAt: isNowCompleted ? new Date().toISOString() : undefined
+        };
+      }
+      return task;
+    }));
   };
 
   const handleAddTask = () => {
@@ -242,13 +266,27 @@ export default function HomeScreen() {
     } else if (selectedFilter === 'Completed') {
       baseFiltered = matchesSearch && task.completed;
     } else {
-      // All filter
-      const isCompletedIncluded = showCompletedInAll ? true : !task.completed;
-      baseFiltered = matchesSearch && isCompletedIncluded;
+      // All filter - Always hide completed tasks
+      baseFiltered = matchesSearch && !task.completed;
     }
 
     return baseFiltered;
-  }).sort((a, b) => a.date.localeCompare(b.date));
+  }).sort((a, b) => {
+    if (selectedFilter === 'Completed') {
+      // Sort by completion time - newest first
+      const timeA = a.completedAt || a.createdAt;
+      const timeB = b.completedAt || b.createdAt;
+      return timeB.localeCompare(timeA);
+    }
+    
+    if (selectedFilter === 'Past') {
+      // Sort by date - closest to today first (descending)
+      return b.date.localeCompare(a.date);
+    }
+
+    // Default sorting (Today, Upcoming, All) - closest date first
+    return a.date.localeCompare(b.date);
+  });
 
   const addNewCategory = () => {
     if (newCategoryName.trim() === '') return;
@@ -299,12 +337,28 @@ export default function HomeScreen() {
   };
 
   const todayDate = new Date().toISOString().split('T')[0];
-  const statsTasks = statsScope === 'Today' ? tasks.filter(t => t.date === todayDate) : tasks;
-  
-  const completedTasks = statsTasks.filter(t => t.completed).length;
-  const totalStatsTasks = statsTasks.length;
-  const pendingTasks = totalStatsTasks - completedTasks;
-  const completionRate = totalStatsTasks > 0 ? Math.round((completedTasks / totalStatsTasks) * 100) : 0;
+  const todayTasks = tasks.filter(t => t.date === todayDate);
+  const todayCompleted = todayTasks.filter(t => t.completed).length;
+  const todayTotal = todayTasks.length;
+  const todayProgress = todayTotal > 0 ? Math.round((todayCompleted / todayTotal) * 100) : 0;
+
+  // Global Stats
+  const totalCompleted = tasks.filter(t => t.completed).length;
+  const overdueCount = tasks.filter(t => t.date < todayDate && !t.completed).length;
+  const upcomingCount = tasks.filter(t => t.date > todayDate).length;
+
+
+  // Productivity Level
+  const getProductivityLevel = () => {
+    if (totalCompleted > 50) return { name: 'Titan', icon: '🏆', color: '#8B5CF6' };
+    if (totalCompleted > 20) return { name: 'Master', icon: '💎', color: '#F59E0B' };
+    if (totalCompleted > 5) return { name: 'Achiever', icon: '⭐', color: '#10B981' };
+    return { name: 'Rookie', icon: '🌱', color: '#3B82F6' };
+  };
+  const level = getProductivityLevel();
+
+  // Streak Calculation (Simple mockup for now based on completed tasks)
+  const streak = Math.min(Math.floor(totalCompleted / 3), 7);
 
   const getCalendarDays = () => {
     const year = viewDate.getFullYear();
@@ -364,7 +418,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            <Text style={styles.headerTitle}>DnwTaskMaster</Text>
+            <Text style={styles.headerTitle}>Task Master</Text>
           </View>
           <TouchableOpacity 
             style={[styles.profileButton, { backgroundColor: 'rgba(255,255,255,0.15)' }]}
@@ -397,66 +451,79 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Collapsible Stats Section */}
-      <View style={[styles.collapsibleStats, { backgroundColor: theme.cardBg, borderBottomColor: theme.border }]}>
+      {/* Collapsible Dashboard Insights */}
+      <View style={[styles.superCard, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
         <TouchableOpacity 
-          style={styles.statsHeader} 
-          onPress={() => setIsStatsExpanded(!isStatsExpanded)}
-          activeOpacity={0.7}
+          style={[styles.superHeader, isDashboardExpanded && { marginBottom: 15 }]} 
+          onPress={() => setIsDashboardExpanded(!isDashboardExpanded)}
+          activeOpacity={0.8}
         >
-          <View style={styles.statsHeaderLeft}>
-            <View style={[styles.statsDot, { backgroundColor: theme.primary }]} />
-            <Text style={[styles.statsHeaderText, { color: theme.text }]}>Dashboard Insights</Text>
-            <View style={[styles.statsScopeBadge, { backgroundColor: isDarkMode ? '#334155' : '#F3F4F6' }]}>
-              <Text style={[styles.statsScopeText, { color: theme.textSecondary }]}>{statsScope}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={[styles.levelBadge, { backgroundColor: level.color + '20', borderColor: level.color }]}>
+              <Text style={{ fontSize: 18 }}>{level.icon}</Text>
+              {!isDashboardExpanded && <Text style={[styles.levelText, { color: level.color, marginLeft: 5 }]}>{level.name}</Text>}
+            </View>
+            {isDashboardExpanded && streak > 0 && (
+              <View style={[styles.streakBadge, { backgroundColor: '#FFF7ED' }]}>
+                <Ionicons name="flame" size={16} color="#F97316" />
+                <Text style={styles.streakText}>{streak} Day Streak</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={{ flex: 1, marginLeft: 15 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+              <Text style={[styles.progressLabel, { color: theme.textSecondary }]}>
+                {isDashboardExpanded ? "Today's Goal" : "Goal"}
+              </Text>
+              <Text style={[styles.progressValue, { color: theme.primary }]}>{todayProgress}%</Text>
+            </View>
+            <View style={[styles.progressBarBg, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+              <View style={[styles.progressBarFill, { backgroundColor: theme.primary, width: `${todayProgress}%` }]} />
             </View>
           </View>
-          <Ionicons name={isStatsExpanded ? "chevron-up" : "chevron-down"} size={20} color={theme.textSecondary} />
+
+          <View style={{ marginLeft: 10, alignItems: 'center' }}>
+            <Ionicons 
+              name={isDashboardExpanded ? "chevron-up" : "chevron-down"} 
+              size={20} 
+              color={theme.primary} 
+            />
+            {!isDashboardExpanded && <Text style={{ fontSize: 8, fontWeight: '800', color: theme.primary, marginTop: -2 }}>STATS</Text>}
+          </View>
         </TouchableOpacity>
 
-        {isStatsExpanded && (
-          <View style={styles.statsExpandedContent}>
-            <View style={styles.statsScopeSelector}>
-              {(['Today', 'All'] as const).map((scope) => (
-                <TouchableOpacity 
-                  key={scope}
-                  onPress={() => setStatsScope(scope)}
-                  style={[
-                    styles.scopeBtn, 
-                    statsScope === scope && { backgroundColor: theme.primary, borderColor: theme.primary }
-                  ]}
-                >
-                  <Text style={[styles.scopeBtnText, { color: statsScope === scope ? '#fff' : theme.textSecondary }]}>
-                    {scope}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+        {isDashboardExpanded && (
+          <>
+            <View style={styles.superStatsRow}>
+              <TouchableOpacity 
+                style={[styles.superStatItem, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' }]}
+                onPress={() => setSelectedFilter('Today')}
+              >
+                <Text style={[styles.superStatValue, { color: theme.text }]}>{todayTasks.length}</Text>
+                <Text style={[styles.superStatLabel, { color: theme.textSecondary }]}>TODAY</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.superStatItem, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' }]}
+                onPress={() => setSelectedFilter('Past')}
+              >
+                <Text style={[styles.superStatValue, { color: overdueCount > 0 ? theme.danger : theme.text }]}>{overdueCount}</Text>
+                <Text style={[styles.superStatLabel, { color: theme.textSecondary }]}>OVERDUE</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.superStatItem, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' }]}
+                onPress={() => setSelectedFilter('Upcoming')}
+              >
+                <Text style={[styles.superStatValue, { color: theme.text }]}>{upcomingCount}</Text>
+                <Text style={[styles.superStatLabel, { color: theme.textSecondary }]}>NEXT</Text>
+              </TouchableOpacity>
+              <View style={[styles.superStatItem, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' }]}>
+                <Text style={[styles.superStatValue, { color: theme.success }]}>{totalCompleted}</Text>
+                <Text style={[styles.superStatLabel, { color: theme.textSecondary }]}>TOTAL</Text>
+              </View>
             </View>
 
-            <View style={styles.statsGrid}>
-              <View style={[styles.miniStatCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F9FAFB' }]}>
-                <Ionicons name="checkmark-done" size={20} color="#10B981" />
-                <View>
-                  <Text style={[styles.miniStatNumber, { color: theme.text }]}>{completedTasks}</Text>
-                  <Text style={[styles.miniStatLabel, { color: theme.textSecondary }]}>Done</Text>
-                </View>
-              </View>
-              <View style={[styles.miniStatCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F9FAFB' }]}>
-                <Ionicons name="alert-circle" size={20} color="#F59E0B" />
-                <View>
-                  <Text style={[styles.miniStatNumber, { color: theme.text }]}>{pendingTasks}</Text>
-                  <Text style={[styles.miniStatLabel, { color: theme.textSecondary }]}>Pending</Text>
-                </View>
-              </View>
-              <View style={[styles.miniStatCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F9FAFB' }]}>
-                <Ionicons name="speedometer" size={20} color={theme.primary} />
-                <View>
-                  <Text style={[styles.miniStatNumber, { color: theme.text }]}>{completionRate}%</Text>
-                  <Text style={[styles.miniStatLabel, { color: theme.textSecondary }]}>Rate</Text>
-                </View>
-              </View>
-            </View>
-          </View>
+          </>
         )}
       </View>
 
@@ -547,15 +614,7 @@ export default function HomeScreen() {
                   style={[styles.toggleBtn, { backgroundColor: showCompletedInUpcoming ? theme.primary : (isDarkMode ? '#334155' : '#F3F4F6') }]} 
                   onPress={() => setShowCompletedInUpcoming(!showCompletedInUpcoming)}
                 >
-                  <Text style={[styles.toggleText, { color: showCompletedInUpcoming ? '#fff' : theme.textSecondary }]}>Show Completed</Text>
-                </TouchableOpacity>
-              )}
-              {selectedFilter === 'All' && (
-                <TouchableOpacity 
-                  style={[styles.toggleBtn, { backgroundColor: showCompletedInAll ? theme.primary : (isDarkMode ? '#334155' : '#F3F4F6') }]} 
-                  onPress={() => setShowCompletedInAll(!showCompletedInAll)}
-                >
-                  <Text style={[styles.toggleText, { color: showCompletedInAll ? '#fff' : theme.textSecondary }]}>Show Completed</Text>
+                  <Text style={[styles.toggleText, { color: showCompletedInUpcoming ? '#fff' : theme.textSecondary }]}>Show Done</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={[styles.viewAllButton, { backgroundColor: isDarkMode ? '#1E3A2F' : '#ECFDF5' }]}>
@@ -1719,6 +1778,120 @@ const styles = StyleSheet.create({
   presetText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  superCard: {
+    marginHorizontal: 15,
+    marginTop: -25,
+    borderRadius: 24,
+    padding: 15,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+    zIndex: 10,
+  },
+  superHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  levelBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelText: {
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  progressValue: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  progressBarBg: {
+    height: 8,
+    borderRadius: 4,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  superStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 15,
+  },
+  superStatItem: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  superStatValue: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  superStatLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  focusTask: {
+    marginTop: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderTopWidth: 1,
+  },
+  focusIndicator: {
+    width: 3,
+    height: 24,
+    borderRadius: 2,
+  },
+  focusLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  focusTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  streakText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#F97316',
+  },
+  tipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontStyle: 'italic',
   },
   manageCategoriesBtn: {
     flexDirection: 'row',
